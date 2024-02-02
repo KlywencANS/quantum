@@ -1,0 +1,74 @@
+namespace Quantum.EncoderDecoder {
+    open Microsoft.Quantum.Canon;
+    open Microsoft.Quantum.Diagnostics;
+    open Microsoft.Quantum.Intrinsic;
+    open Microsoft.Quantum.Arrays;
+
+operation Encode(qubits : Qubit[], input : Int) : Unit {
+        for idx in 0..Length(qubits) / 3 - 1 {
+            let qubit = qubits[3 * idx];
+            if (input &&& (1 <<< idx) != 0) {
+                X(qubit);
+            }
+            H(qubit);
+            CNOT(qubit, qubits[3 * idx + 1]);
+            CNOT(qubit, qubits[3 * idx + 2]);
+        }
+    }
+    operation Decode(qubits : Qubit[]) : Int {
+        mutable result = 0;
+        use ancilla = Qubit();
+        for idx in 0..Length(qubits) / 3 - 1 {
+            let mainQubit = qubits[3 * idx];
+            let qubit1 = qubits[3 * idx + 1];
+            let qubit2 = qubits[3 * idx + 2];
+
+            CNOT(mainQubit, qubit1);
+            CNOT(mainQubit, qubit2);
+            H(mainQubit);
+
+            let (result1, result2) = (M(qubit1), M(qubit2));
+            if (result1 == One and result2 == One) {
+                X(mainQubit);
+            }
+
+            if (M(mainQubit) == One) {
+                set result = result + (1 <<< idx);
+            }
+
+            Reset(mainQubit);
+            Reset(qubit1);
+            Reset(qubit2);
+        }
+        return result;
+    }
+
+
+
+    function IsOne(result : Result) : Bool {
+        return result == One;
+    }
+
+    function MajorityVote(measurements : Result[]) : Bool {
+        return 2 * Count(IsOne, measurements) > Length(measurements);
+    }
+
+
+    @EntryPoint()
+    operation TestEncoderDecoder() : Unit {
+        let input = 42;
+        use qubits = Qubit[24];
+
+        Encode(qubits, input);
+
+        Message("Quantum state after encoding:");
+        DumpMachine();
+
+        let measurement = Decode(qubits);
+         for qubit in qubits {
+            Reset(qubit);
+         }
+        Message($"Decimal number before encoding: {input}");
+        Message($"Measurement result: {measurement}");
+    }
+}
